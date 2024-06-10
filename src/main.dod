@@ -1,0 +1,10 @@
+const PI: float = 3.141592;
+
+function main() {
+    let radius_1 = 5;
+
+    let area = PI * radius * radius;
+
+    print("The area is: ");
+    println(area.round(2));
+}
