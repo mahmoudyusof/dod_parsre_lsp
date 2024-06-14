@@ -25,6 +25,7 @@ pub struct Token {
     pub kind: TokenKind,
 }
 
+
 impl Clone for TokenKind {
     fn clone(&self) -> Self {
         match self {
