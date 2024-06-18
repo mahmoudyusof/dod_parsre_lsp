@@ -16,7 +16,13 @@ recieved: 1 - 2.0 - textDocument/didOpen
 
  writing diagnostics: Content-Length: 294
 
-{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///home/mahmoud/compiler/src/main.dod","version":1,"diagnostics":[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"message":"your custom dod language server is running","severity":3}]}}
+{"jsonrpc
+recieved: 2 - 2.0 - shutdown
+
+
+found request: shutdown
+
+s":{"uri":"file:///home/mahmoud/compiler/src/main.dod","version":1,"diagnostics":[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"message":"your custom dod language server is running","severity":3}]}}
 
 
 recieved: 1 - 2.0 - textDocument/didChange
