@@ -9,7 +9,6 @@ use compiler::types::diagnostics::{
 };
 use compiler::types::did_change::{parse_change_notification, DidChangeNotification};
 use compiler::types::did_save::{parse_save_notification, DidSaveNotification};
-use compiler::types::initialization::DiagnosticOptions;
 use compiler::types::{
     did_open::{parse_open_notification, DidOpenNotification},
     initialization::{Capabilities, InitializationResponse, InitializeResult, ServerInfo},
