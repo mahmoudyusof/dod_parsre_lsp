@@ -1,8 +1,9 @@
+use core::panic;
 use std::{
     collections::HashSet,
     fs::File,
-    io::{BufReader, Bytes, Read},
-    iter::Peekable,
+    io::{BufReader, Read, Write},
+    iter::Peekable, str::Bytes,
 };
 
 #[derive(Debug)]
@@ -21,8 +22,11 @@ pub enum TokenKind {
     EOF,
 }
 
+#[derive(Debug)]
 pub struct Token {
     pub kind: TokenKind,
+    pub line: u32,
+    pub column: u32
 }
 
 
@@ -67,27 +71,51 @@ impl Clone for Token {
     fn clone(&self) -> Self {
         Token {
             kind: self.kind.clone(),
+            line: self.line.clone(),
+            column: self.column.clone()
         }
     }
 }
 
-pub struct Tokenizer {
-    iterator: Peekable<Bytes<BufReader<File>>>,
+pub struct Tokenizer<'a> {
+    iterator: Peekable<Bytes<'a>>,
     current_token: Option<Token>,
+    current_line: u32,
+    current_col: u32
 }
 
-impl Tokenizer {
-    pub fn new(file: File) -> Self {
-        let reader = BufReader::new(file);
-        let iterator = reader.bytes().peekable();
+impl<'a> Tokenizer<'a> {
+    //pub fn new(file: File) -> Self {
+    //    let reader = BufReader::new(file);
+    //    let iterator = reader.bytes().peekable();
+    //
+    //    let mut tokenizer = Tokenizer {
+    //        iterator,
+    //        current_token: None,
+    //        current_line: 1,
+    //        current_col: 1
+    //    };
+    //
+    //    tokenizer.parse_token();
+    //    tokenizer
+    //}
 
+    pub fn tokenize(code: &'a str) -> Vec<Token> {
+        let codeText = code.bytes().peekable();
         let mut tokenizer = Tokenizer {
-            iterator,
+            iterator: codeText,
             current_token: None,
+            current_col: 1,
+            current_line: 1
         };
 
         tokenizer.parse_token();
-        tokenizer
+
+        let mut tokens = vec![];
+        for token in tokenizer {
+            tokens.push(token);
+        }
+        tokens
     }
 
     fn get_word(&mut self, byte: u8) -> Token {
@@ -102,10 +130,10 @@ impl Tokenizer {
 
         loop {
             match self.iterator.peek() {
-                Some(Ok(byte)) => {
+                Some(byte) => {
                     if char::from(*byte).is_alphanumeric() || *byte == b'_' {
                         word.push(char::from(*byte));
-                        self.iterator.next();
+                        self.next_byte();
                     } else {
                         break;
                     }
@@ -119,10 +147,14 @@ impl Tokenizer {
         if keywords.contains(word.as_str()) {
             return Token {
                 kind: TokenKind::KEYWORD(word),
+                line: self.current_line,
+                column: self.current_col
             };
         } else {
             return Token {
                 kind: TokenKind::IDENTIFIER(word),
+                line: self.current_line,
+                column: self.current_col
             };
         }
     }
@@ -134,14 +166,14 @@ impl Tokenizer {
 
         loop {
             match self.iterator.peek() {
-                Some(Ok(byte)) => {
+                Some(byte) => {
                     if *byte == b'.' {
                         word.push(char::from(*byte));
-                        self.iterator.next();
+                        self.next_byte();
                         is_float = true;
                     } else if char::from(*byte).is_numeric() {
                         word.push(char::from(*byte));
-                        self.iterator.next();
+                        self.next_byte();
                     } else {
                         break;
                     }
@@ -160,13 +192,13 @@ impl Tokenizer {
 
         loop {
             match self.iterator.peek() {
-                Some(Ok(b'"')) => {
-                    self.iterator.next();
+                Some(b'"') => {
+                    self.next_byte();
                     break;
                 }
-                Some(Ok(byte)) => {
+                Some(byte) => {
                     string.push(char::from(*byte));
-                    self.iterator.next();
+                    self.next_byte();
                 }
                 _ => {
                     break;
@@ -177,132 +209,198 @@ impl Tokenizer {
         string
     }
 
+    fn next_byte(&mut self) -> Option<u8> {
+        let byte = self.iterator.next();
+        if let Some(byte) = byte {
+            match byte {
+                b'\n' => {
+                    self.current_col = 0;
+                    self.current_line += 1;
+                    return Some(b'\n');
+                },
+                byte => {
+                    self.current_col += 1;
+                    return Some(byte);
+                }
+            }
+        } else {
+            return None;
+        }
+    }
+
     pub fn peek_token(&self) -> Option<Token> {
         return self.current_token.clone();
     }
 
     fn parse_token(&mut self) {
-        if let Some(Token {
-            kind: TokenKind::EOF,
-        }) = self.current_token
+        if let Some(token) = &self.current_token // borrowing
         {
-            self.current_token = None;
-            return;
+            match token.kind {
+                TokenKind::EOF => {
+
+                    self.current_token = None;
+                    return;
+                },
+                _ => {}
+            }
         }
-        let byte = self.iterator.next();
+
+
+
+        let byte = self.next_byte();
 
         if let None = byte {
             self.current_token = Some(Token {
                 kind: TokenKind::EOF,
+                line: self.current_line,
+                column: self.current_col
             });
             return;
         }
 
-        let byte = byte.unwrap().expect("error trying to read character");
+        let byte = byte.unwrap();
 
         if byte == b';' {
             self.current_token = Some(Token {
                 kind: TokenKind::SEMICOLON,
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b':' {
             match self.iterator.peek() {
-                Some(Ok(b':')) => {
+                Some(b':') => {
                     self.current_token = Some(Token {
                         kind: TokenKind::DCOLON,
+                        line: self.current_line,
+                        column: self.current_col
                     });
-                    self.iterator.next();
+                    self.next_byte();
                 }
                 _ => {
                     self.current_token = Some(Token {
                         kind: TokenKind::COLON,
+                        line: self.current_line,
+                        column: self.current_col
                     });
                 }
             }
         } else if byte == b',' {
             self.current_token = Some(Token {
                 kind: TokenKind::COMMA,
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b'(' {
             self.current_token = Some(Token {
                 kind: TokenKind::LPAREN,
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b')' {
             self.current_token = Some(Token {
                 kind: TokenKind::RPAREN,
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b'{' {
             self.current_token = Some(Token {
                 kind: TokenKind::LCURLY,
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b'}' {
             self.current_token = Some(Token {
                 kind: TokenKind::RCURLY,
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b'[' {
             self.current_token = Some(Token {
                 kind: TokenKind::LSQUARE,
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b']' {
             self.current_token = Some(Token {
                 kind: TokenKind::RSQUARE,
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b'.' {
             self.current_token = Some(Token {
                 kind: TokenKind::DOT,
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b'!' {
             match self.iterator.peek() {
-                Some(Ok(b'=')) => {
+                Some(b'=') => {
                     self.current_token = Some(Token {
                         kind: TokenKind::NEQ,
+                        line: self.current_line,
+                        column: self.current_col
                     });
-                    self.iterator.next();
+                    self.next_byte();
                 }
                 _ => {
                     self.current_token = Some(Token {
                         kind: TokenKind::BANG,
+                        line: self.current_line,
+                        column: self.current_col
                     })
                 }
             }
         } else if byte == b'=' {
             match self.iterator.peek() {
-                Some(Ok(b'=')) => {
+                Some(b'=') => {
                     self.current_token = Some(Token {
                         kind: TokenKind::EQ,
+                        line: self.current_line,
+                        column: self.current_col
                     });
-                    self.iterator.next();
+                    self.next_byte();
                 }
                 _ => {
                     self.current_token = Some(Token {
                         kind: TokenKind::ASSIGNE,
+                        line: self.current_line,
+                        column: self.current_col
                     })
                 }
             }
         } else if byte == b'<' {
             match self.iterator.peek() {
-                Some(Ok(b'=')) => {
+                Some(b'=') => {
                     self.current_token = Some(Token {
                         kind: TokenKind::LTEQ,
+                        line: self.current_line,
+                        column: self.current_col
                     });
-                    self.iterator.next();
+                    self.next_byte();
                 }
                 _ => {
                     self.current_token = Some(Token {
                         kind: TokenKind::LT,
+                        line: self.current_line,
+                        column: self.current_col
                     })
                 }
             }
         } else if byte == b'>' {
             match self.iterator.peek() {
-                Some(Ok(b'=')) => {
+                Some(b'=') => {
                     self.current_token = Some(Token {
                         kind: TokenKind::GTEQ,
+                        line: self.current_line,
+                        column: self.current_col
                     });
-                    self.iterator.next();
+                    self.next_byte();
                 }
                 _ => {
                     self.current_token = Some(Token {
                         kind: TokenKind::GT,
+                        line: self.current_line,
+                        column: self.current_col
                     })
                 }
             }
@@ -310,26 +408,38 @@ impl Tokenizer {
             let string = self.get_string();
             self.current_token = Some(Token {
                 kind: TokenKind::STRING(string),
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b'+' {
             self.current_token = Some(Token {
                 kind: TokenKind::ADD,
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b'-' {
             self.current_token = Some(Token {
                 kind: TokenKind::SUB,
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b'*' {
             self.current_token = Some(Token {
                 kind: TokenKind::MUL,
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b'/' {
             self.current_token = Some(Token {
                 kind: TokenKind::DIV,
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b'%' {
             self.current_token = Some(Token {
                 kind: TokenKind::MOD,
+                line: self.current_line,
+                column: self.current_col
             });
         } else if byte == b' ' || byte == b'\t' || byte == b'\r' || byte == b'\n' {
             self.parse_token();
@@ -343,6 +453,8 @@ impl Tokenizer {
 
                 self.current_token = Some(Token {
                     kind: TokenKind::FLOAT(val),
+                    line: self.current_line,
+                    column: self.current_col
                 });
             } else {
                 let val: i32 = match value.parse() {
@@ -352,6 +464,8 @@ impl Tokenizer {
 
                 self.current_token = Some(Token {
                     kind: TokenKind::INT(val),
+                    line: self.current_line,
+                    column: self.current_col
                 });
             }
         } else if byte == b'_' || char::from(byte).is_alphabetic() {
@@ -367,7 +481,7 @@ impl Tokenizer {
     }
 }
 
-impl Iterator for Tokenizer {
+impl<'a> Iterator for Tokenizer<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {

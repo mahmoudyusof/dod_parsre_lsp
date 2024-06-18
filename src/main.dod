@@ -1,1 +1,13 @@
-!(b * 2 + 1) - 1 == 5 + !a * 5.22 - c - 55 / PI
+let PI = 3.14159265;
+
+let radius = 5;
+
+if (radius > 0) {
+    let area = radius * radius * PI;
+    let isVeryBig = area > 100;
+
+    if (isVeryBig) { 
+        let scale = 0.5;
+    }
+}
+
